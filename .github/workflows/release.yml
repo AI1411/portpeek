@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-macos
+          - x86_64-macos
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build binary
+        run: |
+          zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+          mkdir dist
+          cp zig-out/bin/pps dist/pps
+          cd dist
+          tar czf pps-${{ matrix.target }}.tar.gz pps
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pps-${{ matrix.target }}
+          path: dist/pps-${{ matrix.target }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      aarch64_sha256: ${{ steps.sha.outputs.aarch64_sha256 }}
+      x86_64_sha256: ${{ steps.sha.outputs.x86_64_sha256 }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pps-*
+          merge-multiple: true
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          echo "aarch64_sha256=$(sha256sum pps-aarch64-macos.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "x86_64_sha256=$(sha256sum pps-x86_64-macos.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release create "$TAG" \
+            pps-aarch64-macos.tar.gz \
+            pps-x86_64-macos.tar.gz \
+            --repo "$REPO" \
+            --title "$TAG" \
+            --generate-notes
+
+  update-tap:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: AI1411/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update formula
+        env:
+          VERSION: ${{ github.ref_name }}
+          AARCH64_SHA256: ${{ needs.release.outputs.aarch64_sha256 }}
+          X86_64_SHA256: ${{ needs.release.outputs.x86_64_sha256 }}
+        run: |
+          VERSION_NUM=${VERSION#v}
+          sed -i "s/version \".*\"/version \"${VERSION_NUM}\"/" Formula/pps.rb
+          sed -i "s/sha256 \"[0-9a-f]*\" # aarch64/sha256 \"${AARCH64_SHA256}\" # aarch64/" Formula/pps.rb
+          sed -i "s/sha256 \"[0-9a-f]*\" # x86_64/sha256 \"${X86_64_SHA256}\" # x86_64/" Formula/pps.rb
+
+      - name: Commit and push
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/pps.rb
+          git diff --staged --quiet || git commit -m "chore: update pps to $TAG"
+          git push

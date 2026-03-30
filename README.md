@@ -12,6 +12,15 @@
 
 ## インストール
 
+### Homebrew（macOS 推奨）
+
+```bash
+brew tap AI1411/tap
+brew install pps
+```
+
+### ソースからビルド
+
 ```bash
 git clone https://github.com/AI1411/portpeek.git
 cd portpeek
