@@ -11,6 +11,7 @@ pub const PortFilter = union(enum) {
         if (std.mem.indexOf(u8, port_part, "-")) |dash_idx| {
             const min = try std.fmt.parseInt(u16, port_part[0..dash_idx], 10);
             const max = try std.fmt.parseInt(u16, port_part[dash_idx + 1 ..], 10);
+            if (min > max) return error.InvalidSpec;
             return .{ .range = .{ .min = min, .max = max } };
         } else {
             const port = try std.fmt.parseInt(u16, port_part, 10);

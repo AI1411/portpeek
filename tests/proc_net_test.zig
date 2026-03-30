@@ -188,3 +188,18 @@ test "PortFilter: 範囲マッチ" {
     try std.testing.expect(f.matches(5000));
     try std.testing.expect(!f.matches(2999));
 }
+
+test "PortFilter: 範囲境界値マッチ" {
+    const f = try port_filter.PortFilter.parse(std.testing.allocator, ":3000-9000");
+    try std.testing.expect(f.matches(3000));
+    try std.testing.expect(f.matches(9000));
+    try std.testing.expect(!f.matches(9001));
+}
+
+test "PortFilter: 逆順範囲はエラー" {
+    try std.testing.expectError(error.InvalidSpec, port_filter.PortFilter.parse(std.testing.allocator, ":9000-3000"));
+}
+
+test "PortFilter: u16範囲外はエラー" {
+    try std.testing.expectError(error.Overflow, port_filter.PortFilter.parse(std.testing.allocator, ":70000"));
+}
