@@ -85,6 +85,39 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const json_out_mod = b.createModule(.{
+        .root_source_file = b.path("src/output/json.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
+    const tui_mod = b.createModule(.{
+        .root_source_file = b.path("src/output/tui.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const kill_action_mod = b.createModule(.{
+        .root_source_file = b.path("src/action/kill.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const wait_action_mod = b.createModule(.{
+        .root_source_file = b.path("src/action/wait.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const check_action_mod = b.createModule(.{
+        .root_source_file = b.path("src/action/check.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     // ── 実行ファイル ──────────────────────────────────────────────
     const exe = b.addExecutable(.{
         .name = "portsnap",
@@ -98,6 +131,14 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "proc_fd", .module = proc_fd_mod },
                 .{ .name = "proc_info", .module = proc_info_mod },
                 .{ .name = "table", .module = table_mod },
+                .{ .name = "json_out", .module = json_out_mod },
+                .{ .name = "tui", .module = tui_mod },
+                .{ .name = "port_filter", .module = port_filter_mod },
+                .{ .name = "process_filter", .module = process_filter_mod },
+                .{ .name = "state_filter", .module = state_filter_mod },
+                .{ .name = "kill_action", .module = kill_action_mod },
+                .{ .name = "wait_action", .module = wait_action_mod },
+                .{ .name = "check_action", .module = check_action_mod },
             },
         }),
     });
