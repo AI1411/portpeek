@@ -37,14 +37,14 @@ pub fn fetchDockerPorts(allocator: std.mem.Allocator) ![]DockerPort {
     _ = try std.posix.write(sock, request);
 
     // レスポンス受信
-    var response = std.ArrayList(u8).init(allocator);
-    defer response.deinit();
+    var response: std.ArrayList(u8) = .empty;
+    defer response.deinit(allocator);
 
     var buf: [4096]u8 = undefined;
     while (true) {
         const n = std.posix.read(sock, &buf) catch break;
         if (n == 0) break;
-        try response.appendSlice(buf[0..n]);
+        try response.appendSlice(allocator, buf[0..n]);
     }
 
     // HTTP ヘッダーをスキップして JSON ボディを取得
@@ -62,7 +62,7 @@ pub fn fetchDockerPorts(allocator: std.mem.Allocator) ![]DockerPort {
         else => return try allocator.alloc(DockerPort, 0),
     };
 
-    var ports = std.ArrayList(DockerPort).init(allocator);
+    var ports: std.ArrayList(DockerPort) = .empty;
 
     for (containers.items) |container| {
         const obj = switch (container) {
@@ -123,7 +123,7 @@ pub fn fetchDockerPorts(allocator: std.mem.Allocator) ![]DockerPort {
                 else => continue,
             };
 
-            try ports.append(.{
+            try ports.append(allocator, .{
                 .container_id = id,
                 .container_name = name,
                 .host_port = host_port,
@@ -133,5 +133,5 @@ pub fn fetchDockerPorts(allocator: std.mem.Allocator) ![]DockerPort {
         }
     }
 
-    return try ports.toOwnedSlice();
+    return try ports.toOwnedSlice(allocator);
 }

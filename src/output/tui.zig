@@ -95,6 +95,6 @@ pub fn run(allocator: std.mem.Allocator) !void {
         try w.writeAll("[Ctrl+C] \u{7d42}\u{4e86}\n");
         try out_writer.interface.flush();
 
-        std.time.sleep(std.time.ns_per_s);
+        std.Thread.sleep(std.time.ns_per_s);
     }
 }

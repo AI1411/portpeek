@@ -34,7 +34,7 @@ pub fn waitForPort(allocator: std.mem.Allocator, spec: []const u8, timeout_sec: 
             std.process.exit(0);
         }
 
-        std.time.sleep(200 * std.time.ns_per_ms);
+        std.Thread.sleep(200 * std.time.ns_per_ms);
     }
 
     var buf: [128]u8 = undefined;

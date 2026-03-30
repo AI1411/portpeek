@@ -1,9 +1,12 @@
 // src/scanner/proc_net.zig
-// /proc/net/tcp, tcp6, udp, udp6 のパーサー
+// /proc/net/tcp, tcp6, udp, udp6 のパーサー（Linux）
+// macOS では macos_net モジュールへ委譲する。
 
 const std = @import("std");
+const builtin = @import("builtin");
 const types = @import("types");
 const hex_utils = @import("hex");
+const macos_net = @import("macos_net");
 
 /// /proc/net/tcp(6)/udp(6) の1行をパースして PortEntry を返す。
 /// ヘッダー行・空行・パースエラーの場合は null を返す。
@@ -111,9 +114,13 @@ pub fn scanFile(allocator: std.mem.Allocator, path: []const u8, protocol: types.
     }
 }
 
-/// /proc/net/tcp, tcp6, udp, udp6 をすべてスキャンして entries に追記する。
-/// ファイルが存在しない場合はスキップする。
+/// /proc/net/tcp, tcp6, udp, udp6 をすべてスキャンして entries に追記する（Linux）。
+/// macOS では lsof を使用する。
 pub fn scanAll(allocator: std.mem.Allocator, entries: *std.ArrayList(types.PortEntry)) !void {
+    if (comptime builtin.os.tag == .macos) {
+        return macos_net.scanAll(allocator, entries);
+    }
+
     const targets = [_]struct { path: []const u8, protocol: types.Protocol }{
         .{ .path = "/proc/net/tcp", .protocol = .tcp },
         .{ .path = "/proc/net/tcp6", .protocol = .tcp6 },

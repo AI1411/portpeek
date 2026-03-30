@@ -20,5 +20,5 @@ pub const Signal = enum(u6) {
 
 pub fn sendSignal(pid: u32, sig: Signal) !void {
     const pid_signed: std.posix.pid_t = @intCast(pid);
-    try std.posix.kill(pid_signed, @as(u32, @intFromEnum(sig)));
+    try std.posix.kill(pid_signed, @as(u8, @intFromEnum(sig)));
 }

@@ -26,6 +26,15 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const macos_net_mod = b.createModule(.{
+        .root_source_file = b.path("src/scanner/macos_net.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
     const proc_net_mod = b.createModule(.{
         .root_source_file = b.path("src/scanner/proc_net.zig"),
         .target = target,
@@ -33,6 +42,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "types", .module = types_mod },
             .{ .name = "hex", .module = hex_mod },
+            .{ .name = "macos_net", .module = macos_net_mod },
         },
     });
 
@@ -158,7 +168,7 @@ pub fn build(b: *std.Build) void {
 
     // ── 実行ファイル ──────────────────────────────────────────────
     const exe = b.addExecutable(.{
-        .name = "portsnap",
+        .name = "pps",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,

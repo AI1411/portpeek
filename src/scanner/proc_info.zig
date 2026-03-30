@@ -1,7 +1,9 @@
 // src/scanner/proc_info.zig
-// /proc/[pid]/comm と /proc/[pid]/cmdline を読み込んでプロセス情報を解決する。
+// /proc/[pid]/comm と /proc/[pid]/cmdline を読み込んでプロセス情報を解決する（Linux）。
+// macOS では lsof がコマンド名を直接返すため no-op。
 
 const std = @import("std");
+const builtin = @import("builtin");
 const types = @import("types");
 
 /// 指定した proc_path から /proc/[pid]/comm を読んでプロセス名を返す（テスト用）。
@@ -94,7 +96,8 @@ pub fn resolveProcessInfoFromPath(allocator: std.mem.Allocator, entries: []types
 }
 
 /// buildInodePidMap で取得した pid を持つ各 PortEntry に process_name と cmdline を付与する。
-/// 付与した文字列はすべて allocator で確保され、呼び出し元が管理する責任を持つ。
+/// macOS では lsof がコマンド名を既に解決するため no-op。
 pub fn resolveProcessInfo(allocator: std.mem.Allocator, entries: []types.PortEntry) !void {
+    if (comptime builtin.os.tag == .macos) return;
     return resolveProcessInfoFromPath(allocator, entries, "/proc");
 }

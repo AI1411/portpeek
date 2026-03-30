@@ -24,10 +24,10 @@ const Subcommand = enum {
 };
 
 pub fn main() !void {
-    if (comptime builtin.os.tag != .linux) {
+    if (comptime (builtin.os.tag != .linux and builtin.os.tag != .macos)) {
         var stderr_buf: [256]u8 = undefined;
         var stderr_writer = std.fs.File.stderr().writer(&stderr_buf);
-        try stderr_writer.interface.writeAll("portsnap: only supported on Linux\n");
+        try stderr_writer.interface.writeAll("pps: only supported on Linux and macOS\n");
         try stderr_writer.interface.flush();
         std.process.exit(1);
     }
@@ -48,7 +48,7 @@ pub fn main() !void {
     var subcommand_port: ?[]const u8 = null;
     var kill_signal: []const u8 = "SIGTERM";
     var wait_timeout: u64 = 30;
-    var check_ports = std.ArrayList([]const u8).init(allocator);
+    var check_ports: std.ArrayList([]const u8) = .empty;
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -72,7 +72,7 @@ pub fn main() !void {
             subcommand = .check;
             i += 1;
             while (i < args.len) : (i += 1) {
-                try check_ports.append(args[i]);
+                try check_ports.append(allocator, args[i]);
             }
         } else if (std.mem.eql(u8, arg, "watch")) {
             subcommand = .watch;
@@ -121,7 +121,7 @@ pub fn main() !void {
             try proc_info.resolveProcessInfo(allocator, entries.items);
 
             // フィルタ適用
-            var filtered = std.ArrayList(types.PortEntry).init(allocator);
+            var filtered: std.ArrayList(types.PortEntry) = .empty;
             for (entries.items) |e| {
                 if (listen_only and !state_filter.isListen(e)) continue;
                 if (port_spec) |spec| {
@@ -129,11 +129,10 @@ pub fn main() !void {
                     if (!f.matches(e.local_port)) continue;
                 }
                 if (process_pattern) |pat| {
-                    var pf = try process_filter.ProcessFilter.init(allocator, pat);
-                    defer pf.deinit();
+                    const pf = process_filter.ProcessFilter{ .pattern = pat };
                     if (!pf.matches(e.process_name)) continue;
                 }
-                try filtered.append(e);
+                try filtered.append(allocator, e);
             }
 
             var stdout_buf: [8192]u8 = undefined;

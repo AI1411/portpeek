@@ -1,7 +1,9 @@
 // src/scanner/proc_fd.zig
-// /proc/[pid]/fd/ のシンボリックリンクを走査して inode→PID の逆引き HashMap を構築する。
+// /proc/[pid]/fd/ のシンボリックリンクを走査して inode→PID の逆引き HashMap を構築する（Linux）。
+// macOS では lsof が PID を直接返すため no-op。
 
 const std = @import("std");
+const builtin = @import("builtin");
 const types = @import("types");
 
 /// 指定した proc_path を走査して inode → PID の HashMap を構築する（テスト用）。
@@ -76,7 +78,8 @@ pub fn resolvePidsFromPath(allocator: std.mem.Allocator, entries: []types.PortEn
 }
 
 /// buildInodePidMap で取得したマップを使い、各 PortEntry に pid を付与する。
-/// マップに存在しない inode の pid は null にリセットする。
+/// macOS では lsof が既に PID を解決するため no-op。
 pub fn resolvePids(allocator: std.mem.Allocator, entries: []types.PortEntry) !void {
+    if (comptime builtin.os.tag == .macos) return;
     return resolvePidsFromPath(allocator, entries, "/proc");
 }

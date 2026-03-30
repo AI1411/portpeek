@@ -13,7 +13,7 @@ fn writeJsonString(writer: anytype, s: []const u8) !void {
             '\n' => try writer.writeAll("\\n"),
             '\r' => try writer.writeAll("\\r"),
             '\t' => try writer.writeAll("\\t"),
-            0x00...0x1F => {
+            0x00...0x08, 0x0B...0x0C, 0x0E...0x1F => {
                 var buf: [7]u8 = undefined;
                 const escaped = std.fmt.bufPrint(&buf, "\\u{x:0>4}", .{c}) catch unreachable;
                 try writer.writeAll(escaped);
