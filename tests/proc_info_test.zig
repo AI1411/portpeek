@@ -224,3 +224,111 @@ test "resolveProcessInfoFromPath: proc ファイルが存在しない PID は pr
 
     try std.testing.expect(entries[0].process_name == null);
 }
+
+test "resolveProcessInfoFromPath: 再実行時に旧アロケーションが解放されメモリリークしない" {
+    const allocator = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try buildFakeProcEntry(tmp.dir, 200, "first\n", "first\x00arg\x00");
+
+    const abs_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(abs_path);
+
+    var entries = [_]types.PortEntry{
+        .{
+            .protocol = .tcp,
+            .local_addr = .{ 0, 0, 0, 0 },
+            .local_addr6 = .{0} ** 16,
+            .local_port = 8080,
+            .remote_addr = .{ 0, 0, 0, 0 },
+            .remote_addr6 = .{0} ** 16,
+            .remote_port = 0,
+            .state = .listen,
+            .inode = 4444,
+            .pid = 200,
+            .process_name = null,
+            .cmdline = null,
+            .uid = 1000,
+            .is_ipv6 = false,
+        },
+    };
+
+    // 1回目の呼び出し
+    try proc_info.resolveProcessInfoFromPath(allocator, &entries, abs_path);
+    try std.testing.expectEqualStrings("first", entries[0].process_name.?);
+
+    // proc ファイルを更新
+    try buildFakeProcEntry(tmp.dir, 200, "second\n", "second\x00arg\x00");
+
+    // 2回目の呼び出し: 旧バッファが解放されて新しい値に更新される
+    // std.testing.allocator がリークを検出するためリークがあればテスト失敗になる
+    try proc_info.resolveProcessInfoFromPath(allocator, &entries, abs_path);
+    defer {
+        if (entries[0].process_name) |n| allocator.free(n);
+        if (entries[0].cmdline) |c| allocator.free(c);
+    }
+
+    try std.testing.expectEqualStrings("second", entries[0].process_name.?);
+    try std.testing.expectEqualStrings("second arg", entries[0].cmdline.?);
+}
+
+test "resolveProcessInfoFromPath: pid が null になった PortEntry の旧フィールドがリセットされる" {
+    const allocator = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    try buildFakeProcEntry(tmp.dir, 300, "daemon\n", "daemon\x00--run\x00");
+
+    const abs_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(abs_path);
+
+    var entries = [_]types.PortEntry{
+        .{
+            .protocol = .tcp,
+            .local_addr = .{ 0, 0, 0, 0 },
+            .local_addr6 = .{0} ** 16,
+            .local_port = 22,
+            .remote_addr = .{ 0, 0, 0, 0 },
+            .remote_addr6 = .{0} ** 16,
+            .remote_port = 0,
+            .state = .listen,
+            .inode = 5555,
+            .pid = 300,
+            .process_name = null,
+            .cmdline = null,
+            .uid = 0,
+            .is_ipv6 = false,
+        },
+    };
+
+    // 1回目: pid=300 でフィールドを付与
+    try proc_info.resolveProcessInfoFromPath(allocator, &entries, abs_path);
+    try std.testing.expectEqualStrings("daemon", entries[0].process_name.?);
+
+    // pid を null に変更して再実行
+    entries[0].pid = null;
+    try proc_info.resolveProcessInfoFromPath(allocator, &entries, abs_path);
+
+    // 旧アロケーションが解放されて null にリセットされる
+    try std.testing.expect(entries[0].process_name == null);
+    try std.testing.expect(entries[0].cmdline == null);
+}
+
+test "readCmdlineFromPath: 末尾が空白の引数を保持する" {
+    const allocator = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    // "echo\x00foo \x00" — 最後の引数 "foo " は末尾に空白を含む
+    try buildFakeProcEntry(tmp.dir, 777, null, "echo\x00foo \x00");
+
+    const abs_path = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(abs_path);
+
+    const cmdline = try proc_info.readCmdlineFromPath(allocator, abs_path, 777);
+    defer allocator.free(cmdline);
+
+    // 末尾の空白が保持されていること
+    try std.testing.expectEqualStrings("echo foo ", cmdline);
+}

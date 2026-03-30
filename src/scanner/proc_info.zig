@@ -32,46 +32,60 @@ pub fn readComm(allocator: std.mem.Allocator, pid: u32) ![]const u8 {
 }
 
 /// 指定した proc_path から /proc/[pid]/cmdline を読んで NULL バイトをスペースに変換して返す（テスト用）。
-/// ファイルが読めない場合は空文字列を返す。呼び出し元が返り値を free する責任を持つ。
+/// ファイルが存在しない・アクセスできない場合は空文字列を返す。
+/// OutOfMemory / StreamTooLong などの深刻なエラーは呼び出し元へ伝播する。
+/// 呼び出し元が返り値を free する責任を持つ。
 pub fn readCmdlineFromPath(allocator: std.mem.Allocator, proc_path: []const u8, pid: u32) ![]const u8 {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const path = std.fmt.bufPrint(&path_buf, "{s}/{d}/cmdline", .{ proc_path, pid }) catch {
-        return allocator.dupe(u8, "");
-    };
+    const path = try std.fmt.bufPrint(&path_buf, "{s}/{d}/cmdline", .{ proc_path, pid });
 
-    const file = std.fs.openFileAbsolute(path, .{}) catch {
-        return allocator.dupe(u8, "");
+    const file = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+        error.FileNotFound, error.AccessDenied => return allocator.dupe(u8, ""),
+        else => return err,
     };
     defer file.close();
 
-    const content = file.readToEndAlloc(allocator, 65536) catch {
-        return allocator.dupe(u8, "");
-    };
+    const content = try file.readToEndAlloc(allocator, 65536);
+    errdefer allocator.free(content);
 
-    // NULL バイト (0x00) をスペースに変換
-    for (content) |*c| {
+    // 末尾の連続する \0 の開始位置を求める。
+    // NUL→空白変換の前に除去することで、最後の引数が空白で終わる場合を保持できる。
+    var end = content.len;
+    while (end > 0 and content[end - 1] == 0) {
+        end -= 1;
+    }
+
+    // 末尾 \0 より前の NUL をスペースに変換
+    for (content[0..end]) |*c| {
         if (c.* == 0) c.* = ' ';
     }
 
-    // 末尾のスペースを除去（cmdline の末尾 NULL 由来）
-    const trimmed = std.mem.trimRight(u8, content, " ");
-    if (trimmed.len == content.len) return content;
+    if (end == content.len) return content;
 
-    const result = allocator.dupe(u8, trimmed) catch content;
-    if (result.ptr != content.ptr) allocator.free(content);
+    const result = try allocator.dupe(u8, content[0..end]);
+    allocator.free(content);
     return result;
 }
 
 /// /proc/[pid]/cmdline を読んで NULL バイトをスペースに変換して返す。
-/// ファイルが読めない場合は空文字列を返す。呼び出し元が返り値を free する責任を持つ。
+/// ファイルが存在しない・アクセスできない場合は空文字列を返す。
+/// 呼び出し元が返り値を free する責任を持つ。
 pub fn readCmdline(allocator: std.mem.Allocator, pid: u32) ![]const u8 {
     return readCmdlineFromPath(allocator, "/proc", pid);
 }
 
-/// 指定した proc_path を使い、各 PortEntry の pid が Some の場合に process_name と cmdline を付与する（テスト用）。
+/// 指定した proc_path を使い、各 PortEntry の process_name と cmdline を更新する（テスト用）。
+/// pid が Some の場合はファイルから読み取って付与し、None の場合は null にリセットする。
+/// 再実行時は既存のアロケーションを解放してから上書きするため、二重解放やリークは発生しない。
 /// 付与した文字列はすべて allocator で確保され、呼び出し元が管理する責任を持つ。
 pub fn resolveProcessInfoFromPath(allocator: std.mem.Allocator, entries: []types.PortEntry, proc_path: []const u8) !void {
     for (entries) |*entry| {
+        // 再実行時のリーク防止: 既存アロケーションを解放してリセット
+        if (entry.process_name) |name| allocator.free(name);
+        if (entry.cmdline) |cmd| allocator.free(cmd);
+        entry.process_name = null;
+        entry.cmdline = null;
+
         const pid = entry.pid orelse continue;
 
         entry.process_name = readCommFromPath(allocator, proc_path, pid) catch null;
