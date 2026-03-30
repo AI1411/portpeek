@@ -108,8 +108,33 @@ pub fn build(b: *std.Build) void {
     });
     const run_proc_info_tests = b.addRunArtifact(proc_info_tests);
 
+    const color_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils/color.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
+    const color_test_mod = b.createModule(.{
+        .root_source_file = b.path("tests/color_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "color", .module = color_mod },
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
+    const color_tests = b.addTest(.{
+        .root_module = color_test_mod,
+    });
+    const run_color_tests = b.addRunArtifact(color_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
     test_step.dependOn(&run_proc_fd_tests.step);
     test_step.dependOn(&run_proc_info_tests.step);
+    test_step.dependOn(&run_color_tests.step);
 }
