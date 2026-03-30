@@ -44,6 +44,15 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const proc_fd_mod = b.createModule(.{
+        .root_source_file = b.path("src/scanner/proc_fd.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
     const test_mod = b.createModule(.{
         .root_source_file = b.path("tests/proc_net_test.zig"),
         .target = target,
@@ -55,10 +64,27 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const proc_fd_test_mod = b.createModule(.{
+        .root_source_file = b.path("tests/proc_fd_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "proc_fd", .module = proc_fd_mod },
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
     const unit_tests = b.addTest(.{
         .root_module = test_mod,
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
+
+    const proc_fd_tests = b.addTest(.{
+        .root_module = proc_fd_test_mod,
+    });
+    const run_proc_fd_tests = b.addRunArtifact(proc_fd_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
+    test_step.dependOn(&run_proc_fd_tests.step);
 }
