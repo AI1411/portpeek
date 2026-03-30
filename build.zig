@@ -100,22 +100,47 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const signal_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils/signal.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const kill_action_mod = b.createModule(.{
         .root_source_file = b.path("src/action/kill.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+            .{ .name = "proc_net", .module = proc_net_mod },
+            .{ .name = "proc_fd", .module = proc_fd_mod },
+            .{ .name = "proc_info", .module = proc_info_mod },
+            .{ .name = "port_filter", .module = port_filter_mod },
+            .{ .name = "signal", .module = signal_mod },
+        },
     });
 
     const wait_action_mod = b.createModule(.{
         .root_source_file = b.path("src/action/wait.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+            .{ .name = "proc_net", .module = proc_net_mod },
+            .{ .name = "port_filter", .module = port_filter_mod },
+        },
     });
 
     const check_action_mod = b.createModule(.{
         .root_source_file = b.path("src/action/check.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+            .{ .name = "proc_net", .module = proc_net_mod },
+            .{ .name = "proc_fd", .module = proc_fd_mod },
+            .{ .name = "proc_info", .module = proc_info_mod },
+        },
     });
 
     // ── 実行ファイル ──────────────────────────────────────────────
