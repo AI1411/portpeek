@@ -41,6 +41,7 @@ pub fn main() !void {
     // オプション
     var listen_only = false;
     var use_json = false;
+    var use_docker = false;
     var port_spec: ?[]const u8 = null;
     var process_pattern: ?[]const u8 = null;
     var subcommand: Subcommand = .list;
@@ -85,6 +86,8 @@ pub fn main() !void {
                 const num_part = if (std.mem.endsWith(u8, t, "s")) t[0 .. t.len - 1] else t;
                 wait_timeout = std.fmt.parseInt(u64, num_part, 10) catch 30;
             }
+        } else if (std.mem.eql(u8, arg, "--docker")) {
+            use_docker = true;
         } else if (std.mem.startsWith(u8, arg, ":")) {
             port_spec = arg;
         }
@@ -140,6 +143,23 @@ pub fn main() !void {
                 try stdout_writer.interface.flush();
             } else {
                 try table.printTable(filtered.items, &stdout_writer.interface);
+                if (use_docker) {
+                    const docker_ports = docker.fetchDockerPorts(allocator) catch &[_]docker.DockerPort{};
+                    for (docker_ports) |dp| {
+                        var local_buf: [24]u8 = undefined;
+                        const local_str = std.fmt.bufPrint(&local_buf, "0.0.0.0:{d}", .{dp.host_port}) catch "?";
+                        var cmd_buf: [48]u8 = undefined;
+                        const cmd_str = std.fmt.bufPrint(&cmd_buf, "{s} -> {d}/{s}", .{ dp.container_id, dp.container_port, dp.protocol }) catch "?";
+                        try stdout_writer.interface.print(" {s:<6}  {s:<47}  {s:<12}  {s:<7}  {s:<16}  {s}\n", .{
+                            "docker",
+                            local_str,
+                            "DOCKER",
+                            "-",
+                            dp.container_name,
+                            cmd_str,
+                        });
+                    }
+                }
                 try stdout_writer.interface.flush();
             }
         },
