@@ -60,6 +60,21 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const process_filter_mod = b.createModule(.{
+        .root_source_file = b.path("src/filter/process.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const state_filter_mod = b.createModule(.{
+        .root_source_file = b.path("src/filter/state.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+
     const table_mod = b.createModule(.{
         .root_source_file = b.path("src/output/table.zig"),
         .target = target,
@@ -164,10 +179,24 @@ pub fn build(b: *std.Build) void {
     const table_tests = b.addTest(.{ .root_module = table_test_mod });
     const run_table_tests = b.addRunArtifact(table_tests);
 
+    const filter_test_mod = b.createModule(.{
+        .root_source_file = b.path("tests/filter_test.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "process_filter", .module = process_filter_mod },
+            .{ .name = "state_filter", .module = state_filter_mod },
+            .{ .name = "types", .module = types_mod },
+        },
+    });
+    const filter_tests = b.addTest(.{ .root_module = filter_test_mod });
+    const run_filter_tests = b.addRunArtifact(filter_tests);
+
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
     test_step.dependOn(&run_proc_fd_tests.step);
     test_step.dependOn(&run_proc_info_tests.step);
     test_step.dependOn(&run_color_tests.step);
     test_step.dependOn(&run_table_tests.step);
+    test_step.dependOn(&run_filter_tests.step);
 }
